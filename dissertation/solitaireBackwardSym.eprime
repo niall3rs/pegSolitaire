@@ -1,0 +1,96 @@
+language ESSENCE' 1.0
+
+letting n be 7
+letting noBoards be 36
+letting binaryDom be domain int(0,1)
+letting nDom be domain int(1..n)
+letting noBoardsDom be domain int(1..noBoards)
+
+find Boards : matrix indexed by [noBoardsDom,nDom,nDom] of binaryDom
+
+find RB1    : matrix indexed by [noBoardsDom,nDom,nDom] of binaryDom
+
+find transitionPeg : matrix indexed by [int(2..noBoards),int(1,2)] of nDom
+
+branching on [ Boards[i,..,..] | i : noBoardsDom ]
+
+heuristic conflict
+
+such that
+  
+  $ Fix the intial peg
+  Boards[1,2,4] = 1,
+  
+  $ Specify empty slot in final board
+  Boards[noBoards,3,4] = 0,
+
+  $ Calculate the number of pegs at each state
+  $ Modelled from 'goal' state to 'initial' state
+  forAll i : noBoardsDom . sum(flatten(Boards[i,..,..])) = i,
+  
+  $ Exactly three squares are different in each pair of subsequent boards
+  forAll i : int(1..noBoards-1) .
+    ( sum j : nDom . sum k : nDom . | Boards[i,j,k] - Boards[i+1,j,k] | ) = 3,
+  
+  $ If a peg is removed in a transition, then two adjacent pegs are added in the same transition (four clauses -> one for each direction)
+  forAll i : int(1..noBoards-1) .
+    forAll j : nDom .
+      forAll k : nDom .
+        ( Boards[i,j,k] - Boards[i+1,j,k] = 1 ) -> ( ( Boards[i+1,j+1, k ] - Boards[ i ,j+1, k ] = 1 ) /\ ( Boards[i+1,j+2, k ] - Boards[ i ,j+2, k ] = 1 ) ) \/
+                                                   ( ( Boards[i+1,j-1, k ] - Boards[ i ,j-1, k ] = 1 ) /\ ( Boards[i+1,j-2, k ] - Boards[ i ,j-2, k ] = 1 ) ) \/
+                                                   ( ( Boards[i+1, j ,k+1] - Boards[ i , j ,k+1] = 1 ) /\ ( Boards[i+1, j ,k+2] - Boards[ i , j ,k+2] = 1 ) ) \/
+                                                   ( ( Boards[i+1, j ,k-1] - Boards[ i , j ,k-1] = 1 ) /\ ( Boards[i+1, j ,k-2] - Boards[ i , j ,k-2] = 1 ) ),
+  
+  $ Fix corner triplets as empty throughout
+  forAll i : noBoardsDom . Boards[ i , 1 , 1 ] = 0,
+  forAll i : noBoardsDom . Boards[ i , 1 , 2 ] = 0,
+  forAll i : noBoardsDom . Boards[ i , 2 , 1 ] = 0,
+  
+  forAll i : noBoardsDom . Boards[ i , 1 ,n-1] = 0,
+  forAll i : noBoardsDom . Boards[ i , 1 , n ] = 0,
+  forAll i : noBoardsDom . Boards[ i , 2 , n ] = 0,
+  
+  forAll i : noBoardsDom . Boards[ i ,n-1, 1 ] = 0,
+  forAll i : noBoardsDom . Boards[ i , n , 1 ] = 0,
+  forAll i : noBoardsDom . Boards[ i , n , 2 ] = 0,
+  
+  forAll i : noBoardsDom . Boards[ i ,n-1, n ] = 0,
+  forAll i : noBoardsDom . Boards[ i , n ,n-1] = 0,
+  forAll i : noBoardsDom . Boards[ i , n , n ] = 0,
+  
+  $ Dead end spotter
+  $ Every board must have two 0s side-by-side
+  $ Problem specific coding so that empty corners don't pass the constraint
+  forAll i : int(1..noBoards-1) .
+    ( exists j : int(3..5) . ( (Boards[i,j,1] + Boards[i,j,2] = 0) \/ (Boards[i,j,6] + Boards[i,j,7] = 0) ) ) \/
+    ( exists j : int(2..6) . ( (Boards[i,j,2] + Boards[i,j,3] = 0) \/ (Boards[i,j,5] + Boards[i,j,6] = 0) ) ) \/
+    ( exists j : nDom . exists k : int(3..4) . (Boards[i,j,k] + Boards[i,j,k+1] = 0) ) \/
+    
+    ( exists k : int(3..5) . ( (Boards[i,1,k] + Boards[i,2,k] = 0) \/ (Boards[i,6,k] + Boards[i,7,k] = 0) ) ) \/
+    ( exists k : int(2..6) . ( (Boards[i,2,k] + Boards[i,3,k] = 0) \/ (Boards[i,5,k] + Boards[i,6,k] = 0) ) ) \/
+    ( exists k : nDom . exists j : int(3..4) . (Boards[i,j,k] + Boards[i,j+1,k] = 0) ),
+  
+  $
+  $ Symmetry breaking
+  $
+  
+  $ RB1 is a reflection of Boards
+  forAll i : noBoardsDom .
+    forAll j : nDom .
+      forAll k : nDom .
+        RB1[i,j,k] = Boards[i,j,n+1-k],
+  
+  $ Break reflectional symmetry
+  
+  forAll i : int(1..noBoards-1) .
+    (forAll j : nDom . forAll k : nDom . Boards[i,j,k] = RB1[i,j,k] ) -> flatten( RB1[i+1,..,..]) <=lex flatten(Boards[i+1,..,..]),
+  
+  $ Define the location of the transition peg
+  forAll i : int(2..noBoards) .
+    forAll j : nDom .
+      forAll k : nDom .
+        ( Boards[i-1,j,k] - Boards[i,j,k] = 1 ) -> (transitionPeg[i,1] = j /\ transitionPeg[i,2] = k),
+  
+  $ Break independent move symmetry
+   forAll i : int(2..noBoards-2) . 
+     ( (sum j : nDom . sum k : nDom . | Boards[i,j,k] - Boards[i+2,j,k] |) = 6 ) -> transitionPeg[i+1,..] <lex transitionPeg[i+2,..]
